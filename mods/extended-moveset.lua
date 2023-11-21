@@ -156,7 +156,7 @@ end
 function act_roll(m)
     local e = gMarioStateExtras[m.playerIndex]
 
-    local MAX_NORMAL_ROLL_SPEED = 50.0
+    local MAX_NORMAL_ROLL_SPEED = 100.0
     local ROLL_BOOST_GAIN = 10.0
     local ROLL_CANCEL_LOCKOUT_TIME = 10
     local BOOST_LOCKOUT_TIME = 20
@@ -228,7 +228,7 @@ end
 
 function act_roll_air(m)
     local e = gMarioStateExtras[m.playerIndex]
-    local MAX_NORMAL_ROLL_SPEED = 50.0
+    local MAX_NORMAL_ROLL_SPEED = 100.0
     local ROLL_AIR_CANCEL_LOCKOUT_TIME = 15
 
     if m.actionTimer == 0 then

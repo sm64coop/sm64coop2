@@ -82,8 +82,10 @@ def main():
     if not langs or not all(a in all_langs for a in langs):
         langs_str = " ".join("[" + lang + "]" for lang in all_langs)
         print("Usage: " + sys.argv[0] + " " + langs_str)
-        print("For each version, baserom.<version>.z64 must exist")
+        print("For each version, baserom.<version>.z64 or baserom.<version>.n64 must exist")
         sys.exit(1)
+
+
 
     asset_map = read_asset_map()
     all_assets = []
@@ -149,7 +151,30 @@ def main():
         if sha1 != expected_sha1:
             print(
                 fname
-                + " has the wrong hash! Found "
+                + " has the wrong hash! Found"
+                + sha1
+                + ", expected "
+                + expected_sha1
+            )
+            sys.exit(1)
+
+    # Format For JP Or us too maybe
+    roms = {}
+    for lang in langs:
+        fname = "baserom." + lang + ".n64"
+        try:
+            with open(fname, "rb") as f:
+                roms[lang] = f.read()
+        except Exception as e:
+            print("Failed to open " + fname + "! " + str(e))
+            sys.exit(1)
+        sha1 = hashlib.sha1(roms[lang]).hexdigest()
+        with open("sm64." + lang + ".sha1", "r") as f:
+            expected_sha1 = f.read().split()[0]
+        if sha1 != expected_sha1:
+            print(
+                fname
+                + " has the wrong hash! Found"
                 + sha1
                 + ", expected "
                 + expected_sha1
@@ -261,6 +286,108 @@ def main():
             else:
                 with open(asset, "wb") as f:
                     f.write(input)
+
+
+
+
+# For JP / .n64
+     # Import new assets
+    for key in keys:
+        assets = todo[key]
+        lang, mio0 = key
+        if mio0 == "@sound":
+            rom = roms[lang]
+            args = [
+                "python3",
+                "tools/disassemble_sound.py",
+                "baserom." + lang + ".z64",
+            ]
+            def append_args(key):
+                size, locs = asset_map["@sound " + key + " " + lang]
+                offset = locs[lang][0]
+                args.append(str(offset))
+                args.append(str(size))
+            append_args("ctl")
+            append_args("tbl")
+            if lang == "sh":
+                args.append("--shindou-headers")
+                append_args("ctl header")
+                append_args("tbl header")
+            args.append("--only-samples")
+            for (asset, pos, size, meta) in assets:
+                print("extracting", asset)
+                args.append(asset + ":" + str(pos))
+            subprocess.run(args, check=True)
+            continue
+
+        if mio0 is not None:
+            image = subprocess.run(
+                [
+                    "./tools/mio0",
+                    "-d",
+                    "-o",
+                    str(mio0),
+                    "baserom." + lang + ".n64",
+                    "-",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
+        else:
+            image = roms[lang]
+
+        for (asset, pos, size, meta) in assets:
+            print("extracting", asset)
+            input = image[pos : pos + size]
+            os.makedirs(os.path.dirname(asset), exist_ok=True)
+            if asset.endswith(".png"):
+                png_file = tempfile.NamedTemporaryFile(prefix="asset", delete=False)
+                try:
+                    png_file.write(input)
+                    png_file.flush()
+                    png_file.close()
+                    if asset.startswith("textures/skyboxes/") or asset.startswith("levels/ending/cake"):
+                        if asset.startswith("textures/skyboxes/"):
+                            imagetype = "sky"
+                        else:
+                            imagetype =  "cake" + ("-eu" if "eu" in asset else "")
+                        subprocess.run(
+                            [
+                                "./tools/skyconv",
+                                "--type",
+                                imagetype,
+                                "--combine",
+                                png_file.name,
+                                asset,
+                            ],
+                            check=True,
+                        )
+                    else:
+                        w, h = meta
+                        fmt = asset.split(".")[-2]
+                        subprocess.run(
+                            [
+                                "./tools/n64graphics",
+                                "-e",
+                                png_file.name,
+                                "-g",
+                                asset,
+                                "-f",
+                                fmt,
+                                "-w",
+                                str(w),
+                                "-h",
+                                str(h),
+                            ],
+                            check=True,
+                        )
+                finally:
+                    png_file.close()
+                    os.remove(png_file.name)
+            else:
+                with open(asset, "wb") as f:
+                    f.write(input)
+    
 
     # Remove old assets
     for asset in previous_assets:
